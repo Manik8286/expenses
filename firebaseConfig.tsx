@@ -16,7 +16,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // ✅ Use platform-specific auth initialization
-let auth;
+let auth: any;
 if (Platform.OS === 'web') {
   auth = getAuth(app); // Web: no persistence needed
 } else {
@@ -26,4 +26,3 @@ if (Platform.OS === 'web') {
 }
 const db = getFirestore(app); 
 export { app, auth, db };
-

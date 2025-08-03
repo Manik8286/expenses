@@ -1,30 +1,23 @@
 import { onAuthStateChanged, User } from 'firebase/auth';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth } from '../firebaseConfig';
 
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-}
+const AuthContext = createContext<{ user: User | null, loading: boolean }>({
+  user: null,
+  loading: true,
+});
 
-const AuthContext = createContext<AuthContextType | null>(null);
-
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider = ({ children }: AuthProviderProps) => {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      console.log('🔁 onAuthStateChanged:', firebaseUser);
       setUser(firebaseUser);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return unsubscribe;
   }, []);
 
   return (
