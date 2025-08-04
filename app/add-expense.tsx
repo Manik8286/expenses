@@ -1,71 +1,149 @@
-import { Picker } from '@react-native-picker/picker';
-import { addDoc, collection, getFirestore } from 'firebase/firestore';
-import React, { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { addDoc, collection, doc, getDoc, updateDoc } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
 import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
-import { app } from '../firebaseConfig'; // adjust path
-
-const db = getFirestore(app);
+import { useAuth } from '../context/AuthContext';
+import { db } from '../firebaseConfig';
 
 export default function AddExpenseScreen() {
-  const [amount, setAmount] = useState('');
-  const [type, setType] = useState('cash');
-  const [description, setDescription] = useState('');
+  const router = useRouter();
+  const { id } = useLocalSearchParams();
+  const { user } = useAuth();
 
-  const handleAddExpense = async () => {
-    if (!amount) {
-      Alert.alert('Please enter an amount');
+  const [amount, setAmount] = useState('');
+  const [type, setType] = useState('');
+  const [description, setDescription] = useState('');
+  const [date, setDate] = useState('');
+
+  useEffect(() => {
+    if (id) {
+      const fetchExpense = async () => {
+        try {
+          const docRef = doc(db, 'expenses', id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setAmount(String(data.amount));
+            setType(data.type);
+            setDescription(data.description);
+            setDate(data.date);
+          }
+        } catch (error) {
+          console.error('Error loading expense:', error);
+          Alert.alert('Error', 'Failed to load expense.');
+        }
+      };
+      fetchExpense();
+    }
+  }, [id]);
+
+  const handleSave = async () => {
+    console.log('👤 Current user from context:', user); // ✅ LOG added here
+
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to save expenses.');
+      console.log('❌ No authenticated user');
       return;
     }
+
+    if (!amount || isNaN(parseFloat(amount)) || !type || !description || !date) {
+      Alert.alert('Validation Error', 'All fields are required and amount must be a number.');
+      console.log('❌ Invalid input:', { amount, type, description, date });
+      return;
+    }
+
+    const expenseData = {
+      amount: parseFloat(amount),
+      type,
+      description,
+      date,
+      userId: user.uid,
+    };
+
+    console.log('📤 Saving expense:', expenseData);
+
     try {
-      await addDoc(collection(db, 'expenses'), {
-        amount: Number(amount), // Ensure amount is stored as a number
-        type,
-        description,
-        date: new Date().toISOString(),
-      });
-      Alert.alert('Expense saved!');
-      setAmount('');
-      setDescription('');
-      setType('cash');
-    } catch (e) {
-      Alert.alert('Failed to save expense');
+      if (id) {
+        const ref = doc(db, 'expenses', id);
+        await updateDoc(ref, expenseData);
+        console.log('✅ Expense updated');
+      } else {
+        await addDoc(collection(db, 'expenses'), expenseData);
+        console.log('✅ Expense added');
+      }
+      router.replace('/');
+    } catch (err) {
+      console.error('❌ Save error:', err);
+      Alert.alert('Error', 'Failed to save expense.');
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Amount</Text>
+      <Text style={styles.title}>{id ? 'Edit Expense' : 'Add Expense'}</Text>
+
       <TextInput
-        style={styles.input}
+        placeholder="Amount"
         keyboardType="numeric"
         value={amount}
         onChangeText={setAmount}
-        placeholder="Enter amount"
+        style={styles.input}
       />
-      <Text style={styles.label}>Type</Text>
-      <Picker
-        selectedValue={type}
-        style={styles.input}
-        onValueChange={(itemValue) => setType(itemValue)}
-      >
-        <Picker.Item label="Cash" value="cash" />
-        <Picker.Item label="UPI" value="upi" />
-        <Picker.Item label="Credit Card" value="creditcard" />
-      </Picker>
-      <Text style={styles.label}>Description</Text>
+
       <TextInput
+        placeholder="Type"
+        value={type}
+        onChangeText={setType}
         style={styles.input}
+      />
+
+      <TextInput
+        placeholder="Description"
         value={description}
         onChangeText={setDescription}
-        placeholder="Description"
+        style={styles.input}
       />
-      <Button title="Add Expense" onPress={handleAddExpense} />
+
+      <TextInput
+        placeholder="Date (YYYY-MM-DD)"
+        value={date}
+        onChangeText={setDate}
+        style={styles.input}
+      />
+
+      <Button title={id ? 'Update' : 'Save'} onPress={handleSave} />
+      
+      <Button
+        title="Test Firebase Write"
+        color="green"
+        onPress={async () => {
+          try {
+            const testData = {
+              test: true,
+              timestamp: new Date(),
+              userId: user?.uid ?? 'no-user',
+            };
+            console.log('📤 Test write:', testData);
+            await addDoc(collection(db, 'expenses'), testData);
+            console.log('✅ Test write success');
+          } catch (e) {
+            console.error('❌ Test write failed:', e);
+            Alert.alert('Test Failed', e.message);
+          }
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  label: { fontWeight: 'bold', marginTop: 12 },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 4, padding: 8, marginTop: 4 },
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 16,
+  },
 });
